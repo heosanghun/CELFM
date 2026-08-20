@@ -1,0 +1,988 @@
+\documentclass{article}
+\usepackage{iclr2027_conference,times}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{natbib}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+\title{EQUIPHASE DEQ: STRUCTURAL PRESERVATION AND MULTISTABLE ENERGY LANDSCAPES IN REAL MOLECULAR SYSTEMS}
+
+\author{Anonymous authors\\Paper under double-blind review}
+\date{}
+
+\begin{document}
+
+
+% ================= PAGE 01 =================
+
+\maketitle
+\begin{abstract}
+Deep equilibrium models (DEQs) typically purchase convergence guarantees
+through monotone-operator or contraction constraints that force a unique fixed
+point. We study the autonomous use of equilibrium layers --- relaxation dynamics
+whose attractors are themselves the object of interest, as in energy landscapes and
+associative memories --- and argue that in this setting the uniqueness certificate
+is not free: physical systems are multistable, and a map that provably admits one
+attractor cannot represent two metastable states, let alone their relative free ener-
+gies. We introduce EquiPhase DEQ, an equilibrium model whose dynamics are
+damped velocity Verlet steps on a learned conservative potential with periodicity
+built into the architecture; the step is conformally symplectic (J$\top$$\Omega$J = (1$-$$\eta$)$\Omega$),
+so it dissipates volume at a known rate while inheriting the geometric stability of
+symplectic integration. On a 32-dimensional synthetic double-well system with
+known analytical structure, the model passes a preregistered battery of structural
+and empirical gates. We then evaluate on real molecular data: 750,000 frames of
+alanine dipeptide backbone dihedrals. Under a preregistered protocol with sealed
+evaluation scripts, EquiPhase recovers the $\beta$ and $\alpha$R metastable basins in 5/5 inde-
+pendent seeds, with attractor locations within $\pm$25$^\circ$of data-derived anchors and
+the correct free-energy ordering, and additionally locates the rare $\alpha$L state that
+occupies only 3.0\% of the data in 5/5 seeds. We report our negative results in
+full: an unconstrained score-matching baseline also locates the basins, so the con-
+tribution of structure is not localization but the existence of a consistent scalar
+potential (the baseline field has non-zero curl and admits no free-energy readout),
+while a verified Banach contraction baseline collapses to a single non-physical
+fixed point exactly as theory predicts. All quantitative claims trace to hash-sealed,
+preregistered evaluation runs.
+\end{abstract}
+\section{Introduction}
+Deep equilibrium models express implicit layers through fixed-point solutions (Bai et al., 2019),
+within the broader family of implicit and differentiable-optimization layers (Chen et al., 2018; Amos
+\& Kolter, 2017; Agrawal et al., 2019; El Ghaoui et al., 2021). To guarantee that the fixed point
+exists, is unique, and is reachable, standard formulations impose global contraction or monotone-
+operator structure (Winston \& Kolter, 2020; Revay et al., 2020). In physical dynamics --- protein
+conformational transitions, hysteretic switches, multistable landscapes generally --- this uniqueness
+certificate is not a convenience but a contradiction: by Banach's fixed-point theorem (Banach, 1922),
+a globally contractive layer has exactly one attractor and therefore cannot represent two coexisting
+metastable states, let alone the barrier between them. We call this failure mode basin collapse.
+It is not an implementation bug; it is a direct consequence of demanding global contraction, and
+Section 6 exhibits it on real molecular data with a contraction that is verified, not assumed.
+Single-mode collapse is a live problem elsewhere. Recent experiment-guided ensemble modelling
+is motivated by the observation that the flagship sequence-conditioned structure predictor collapses
+to a single dominant conformation even when the underlying structure is heterogeneous, and repairs
+\clearpage
+
+% ================= PAGE 02 =================
+
+this by injecting experimental likelihoods during sampling (Maddipatla et al., 2026). That collapse
+arises from a training objective and in an input-conditioned setting, not from a fixed-point certificate
+in the autonomous regime; we cite it not as an instance of Corollary 1 but as evidence that single-
+mode collapse under genuine multistability is costly in practice, and that the remedies currently on
+offer are data-side rather than architecture-side.
+Scope: autonomous equilibrium dynamics, not input-conditioned inference.
+We state the
+boundary of our claim precisely, because the standard DEQ and the model studied here use
+fixed points for different purposes.
+A conventional DEQ solves an input-conditioned problem
+z$*$= f$\theta$(z$*$, x): contraction guarantees uniqueness per input x, and multimodality across inputs
+remains representable through the dependence of z$*$on x. Our subject is the autonomous regime
+in which the equilibrium map is iterated as relaxation dynamics on a state space and the attractors
+themselves carry the semantics --- the regime of energy-based attractor networks (Ramsauer et al.,
+2021; Krotov \& Hopfield, 2016) and of physical metastability, where ``which basin does this initial
+condition fall into, and how deep is it?'' is the question being asked. In this regime the per-input
+uniqueness certificate becomes a global one, and Corollary 1 applies with full force (Remark 1
+makes the distinction formal). All claims in this paper are claims about the autonomous regime.
+Contributions.
+$\bullet$  A multistable equilibrium architecture. EquiPhase DEQ couples a learned conservative
+potential (periodicity guaranteed by construction) with damped velocity Verlet dynamics,
+deliberately forgoing global fixed-point uniqueness to retain multistability. The novelty
+is not conservative score parameterization per se --- gradient-of-energy score models are
+established (Salimans \& Ho, 2021; Saremi et al., 2018) --- but the use of a conformally
+symplectic integrator (Proposition 1) as the equilibrium solver, which makes fixed points
+of the model coincide exactly with critical points of the learned potential and attractor
+counting coincide with metastable-state counting.
+$\bullet$  An impossibility observation made empirical. We verify at run time that our monotone
+baseline is a genuine contraction (theoretical bound 0.95; empirical Lipschitz maximum
+0.788 < 1) and observe the Banach-mandated collapse: all 576 grid initializations converge
+to a single fixed point at ($\phi$, $\psi$) = ($-$50.1$^\circ$, +18.5$^\circ$) --- a location corresponding to no
+metastable state of the data --- with training loss frozen at 0.712 versus 0.019 for EquiPhase.
+$\bullet$  Real-data validation with preregistered gates.
+On alanine dipeptide (750k frames),
+EquiPhase passes location, identity, and free-energy-ordering gates in 5/5 seeds and de-
+tects the rare $\alpha$L state (3.0\% occupancy) in 5/5 seeds --- a state our own coarse density
+EDA failed to isolate.
+$\bullet$  Honest baselines and full disclosure. A vanilla score network matches basin locations
+(our preregistered gate R4b therefore fails, and we report it); its field, however, has mean
+absolute curl 1.67 and thus no consistent potential. The differentiating claim is calibrated:
+structure buys a free-energy readout, not localization. All experiments follow a preregistra-
+tion with sealed scripts and hash-anchored data; one auditor-side implementation error (an
+invalid contraction in the first monotone run) is documented and corrected in the record.
+RELATED WORK
+Deep Equilibrium Models and Monotone Constraints.
+DEQs (Bai et al., 2019; 2020) refor-
+mulate deep networks by solving for implicit fixed points z$*$= f$\theta$(z$*$, x) rather than evaluating
+explicit feedforward layers; neural ODEs are the continuous-depth counterpart (Chen et al., 2018;
+Dupont et al., 2019). Forward passes rely on classical accelerated fixed-point solvers (Anderson,
+1965; Broyden, 1965), and training uses implicit differentiation or its inexact and Jacobian-free
+variants (Geng et al., 2021; Fung et al., 2022); the framework has been deployed, e.g., in inverse
+problems in imaging (Gilton et al., 2021). To guarantee global fixed-point existence and numerical
+convergence during forward and backward passes, subsequent architectures enforce strict structural
+constraints rooted in monotone operator theory (Ryu \& Boyd, 2016). Monotone operator equi-
+librium networks (Winston \& Kolter, 2020) enforce strong monotonicity, and Lipschitz-certified
+equilibrium models (Revay et al., 2020) parameterize networks with prescribed Lipschitz bounds;
+\clearpage
+
+% ================= PAGE 03 =================
+
+Jacobian regularization stabilizes the solver without a hard certificate (Bai et al., 2021). In the con-
+tractive regime (Lip < 1) these guarantees are obtained, but Banach's theorem then restricts the
+autonomous iteration of the map to a single global attractor (N = 1). Consequently, contractive
+DEQs used as relaxation dynamics are structurally incapable of representing multistable physical
+systems or mapping energy barriers between distinct metastable states; the per-input conditional
+setting is unaffected (Remark 1).
+Conservative Score Parameterization and Energy-Based Models.
+Parameterizing a score as the
+gradient of a scalar energy predates this work: energy-based models define densities through scalar
+energies (LeCun et al., 2006; Du \& Mordatch, 2019; Grathwohl et al., 2020; Song \& Kingma, 2021),
+score matching itself was introduced for unnormalized energy models (Hyv\"arinen, 2005; Song et al.,
+2019; Vincent, 2011), deep energy estimator networks learn V$\theta$ with S = $-$$\nabla$V$\theta$ (Saremi et al.,
+2018), denoising diffusion models train unconstrained score/noise predictors at scale (Ho et al.,
+2020), and Salimans \& Ho (2021) directly ask whether EBMs should model the energy or the score,
+finding the constrained parameterization competitive. We therefore do not claim conservativeness
+as a novel mechanism. Our contribution relative to this line is what the conservative field is for: it
+is embedded as the force term of a dissipative equilibrium layer whose fixed points are the critical
+points of V$\theta$, turning the energy into an executable attractor model with a free-energy readout, and
+this combination is evaluated under an adversarial preregistered protocol against both an uncon-
+strained score field (which localizes but cannot integrate) and a certified contraction (which cannot
+localize at all).
+Physics-Informed Equilibrium and Conservative Networks.
+To incorporate physical structure
+into neural representations, Hamiltonian Neural Networks (Greydanus et al., 2019), Lagrangian
+Neural Networks (Cranmer et al., 2020), Symplectic ODE-Net (Zhong et al., 2020), and symplectic
+recurrent networks (Chen et al., 2020) learn scalar functions whose derivatives govern conservative
+time evolution; physics-informed learning more broadly constrains networks with governing equa-
+tions (Raissi et al., 2019; Karniadakis et al., 2021). Classical HNNs operate primarily as explicit
+ODE integrators rather than implicit equilibrium models, and require full phase-space position and
+momentum pairs during training. Our integrator choice draws on the geometric numerical integra-
+tion literature: velocity Verlet is the workhorse of molecular dynamics (Verlet, 1967; Leimkuhler
+\& Matthews, 2015), and its structural stability under discretization is classical (Hairer et al., 2006);
+conformally symplectic (fixed-rate dissipative) dynamics have likewise been exploited for optimiza-
+tion (Fran\c{c}a et al., 2020). EquiPhase DEQ extends conservative potential learning into the implicit
+equilibrium setting by coupling periodic neural potentials with damped velocity Verlet steps, replac-
+ing exact conservation with a controlled dissipative structure (J$\top$$\Omega$J = (1$-$$\eta$)$\Omega$) so that trajectories
+converge to attractors while inheriting the geometric stability of symplectic integration.
+Score-Based Modeling and Molecular Energy Landscapes.
+Denoising Score Matching (Song
+\& Ermon, 2019; Song et al., 2021) estimates the score field $\nabla$q log p(q) without computing in-
+tractable partition functions. Machine learning now permeates molecular simulation (No\'e et al.,
+2020; Hollingsworth \& Dror, 2018): neural interatomic potentials (Behler \& Parrinello, 2007; Sch\"utt
+et al., 2017) and coarse-grained force fields that learn free-energy surfaces (Wang et al., 2019) target
+the energetics, while structure predictors resolve the fold itself (Jumper et al., 2021). On the kinetics
+side, slow collective variables are identified by TICA (P\'erez-Hern\'andez et al., 2013), Boltzmann
+generators sample equilibrium ensembles with exact reweighting (No\'e et al., 2019), and Markov
+state modeling (Chodera \& No\'e, 2014; Scherer et al., 2015) and its deep variants such as VAMPnets
+(Mardt et al., 2018; Wu \& No\'e, 2020) identify metastable states and their interconversion kinetics.
+A parallel line makes ensembles experiment-consistent by injecting differentiable likelihoods for
+NMR, electron-density and cryo-EM observables as guidance gradients into a pretrained structure
+predictor (Maddipatla et al., 2026). That work is explicit that its ensembles are explanatory with
+respect to the supplied measurements and the model prior rather than calibrated thermodynamic
+populations, that mixture weights should not be read as equilibrium populations, and that energy-
+based or maximum-entropy population estimation remains the open direction. EquiPhase addresses
+the complementary half of that gap: not which structures are consistent with a given measurement,
+but whether the equilibrium layer itself can carry a consistent scalar landscape at all, evaluated on
+a system where the free-energy ordering can be scored rather than assumed. While unconstrained
+score networks can accurately fit local density gradients, their estimated vector fields generally ex-
+\clearpage
+
+% ================= PAGE 04 =================
+
+hibit non-zero curl ($\nabla$$\times$ S ̸= 0), rendering them non-conservative: no single scalar potential V (q)
+has $-$$\nabla$V = S exactly, and any potential extracted post hoc (e.g., by Helmholtz projection or path
+integration) depends on the projection or path chosen. EquiPhase DEQ removes this ambiguity by
+constructing S(q) = $-$$\nabla$qV$\theta$(q) structurally, guaranteeing zero curl and a valid free-energy read-
+out. Section 7 positions the present contribution relative to the Markov-state-modeling toolchain
+explicitly.
+Attractor Networks.
+Attractor dynamics as computation originates with Hopfield (1982); modern
+Hopfield networks (Ramsauer et al., 2021; Krotov \& Hopfield, 2016) realize exponential-capacity
+associative memories as attractor dynamics and are the closest machine-learning precedent for our
+autonomous regime; they target pattern retrieval rather than physical free-energy landscapes, and
+their update rules are not integrators of a learned Hamiltonian-type potential.
+METHOD: EQUIPHASE DEQ
+Learned potential with structural guarantees.
+EquiPhase DEQ represents a system by a scalar
+potential and reaches equilibria by integrating damped conservative dynamics. We describe the
+model in three deliberately separated layers, so that the reader can always tell which properties
+are guaranteed by construction, which are inherited from an analytical prior, and which are em-
+pirical. (i) Structure: the potential is a function of an embedding chosen so that required invari-
+ances hold exactly --- in the synthetic system, the symmetry and identity properties are architectural
+(gates G1/G2'); on dihedral data, the embedding [sin $\phi$, cos $\phi$, sin $\psi$, cos $\psi$] makes V$\theta$ exactly 2$\pi$-
+periodic. (ii) Prior: where an analytical potential Vbase exists (synthetic system) we learn a residual,
+Vtotal = Vbase + vnet; where none exists (molecular data) V$\theta$ is learned alone, and we disclose that
+the prior layer is only partially applicable. (iii) Empirics: all remaining claims are established by
+preregistered gates.
+Damped velocity Verlet dynamics.
+States are phase-space pairs (q, p). One step of the model
+applies
+q1/2 = qt + $\Delta$t
+2m pt,
+(1)
+pt+1 = (1 $-$$\eta$) pt $-$$\Delta$t $\nabla$qV (q1/2),
+$\eta$ = $\gamma$$\Delta$t/m,
+(2)
+qt+1 = q1/2 + $\Delta$t
+2m pt+1.
+(3)
+With $\eta$ = 0 this is the classical velocity Verlet integrator; with $\eta$ $\in$(0, 1) it contracts phase-space
+volume at a fixed, known rate while retaining the integrator's geometric stability. Equilibria of the
+map are exactly the pairs (q$^\star$, 0) with $\nabla$qV (q$^\star$) = 0: fixed points of the dynamics coincide with
+critical points of the learned potential, so counting attractors of the model is counting metastable
+states of V .
+What the learned V estimates.
+Because V$\theta$ is trained by denoising score matching, the population
+optimum of $-$$\nabla$V$\theta$ is the score of the $\sigma$-smoothed data density; the learned V is therefore an estimate
+of the (smoothed) free-energy surface over the chosen collective variables, V $\approx$$-$kBT log p$\sigma$, not
+of a microscopic potential energy. Gate R3 is accordingly a claim about the free-energy landscape
+in ($\phi$, $\psi$) --- the object of interest in metastability analysis --- and not about physical information
+beyond the data distribution (disclosure D8'). What the surface adds over a binned density (exe-
+cutability, curl-freeness, and resolution where mass is scarce) is taken up in Section 7.
+WHY UNIQUENESS GUARANTEES EXCLUDE MULTISTABILITY
+Proposition 1 (Dissipative structure). Let J be the Jacobian of one damped velocity Verlet step
+(1)--(3) with damping $\eta$, and $\Omega$the canonical symplectic form. Then J$\top$$\Omega$J = (1 $-$$\eta$) $\Omega$.
+Proof. Appendix A; the identity is a direct computation with the symmetric Hessian H
+=
+$\nabla$2V (q1/2), and holds for every state, i.e., globally and independently of the learned V .
+\clearpage
+
+% ================= PAGE 05 =================
+
+The step is therefore not symplectic (it does not conserve energy --- by design) but conformally so
+(Fran\c{c}a et al., 2020): phase-space volume shrinks by the constant factor (1 $-$$\eta$) per step, which is
+what drives trajectories into the basins of V rather than orbiting them. In the synthetic system this
+identity is additionally verified numerically to the reported gate tolerance rather than assumed.
+Proposition 2 (Banach collapse). If a DEQ update map g is a contraction, Lip(g) $\le$c < 1, on a
+complete metric space, then g admits exactly one fixed point, and every initialization converges to it.
+Corollary 1. A DEQ whose well-posedness is certified via global contraction (or strong mono-
+tonicity implying it), when iterated as autonomous relaxation dynamics, has attractor count N = 1
+independent of the data it was trained on. Representing N $\ge$2 metastable states --- avoiding basin
+collapse --- requires forgoing the global uniqueness certificate.
+Remark 1 (Input-conditioned DEQs are not the target of this claim). For a conditional map gx(z) =
+f$\theta$(z, x) with Lipz(gx) $\le$c < 1, Banach's theorem yields one fixed point per input x; the solution
+map x 7$\to$z$*$(x) may still be richly multimodal across inputs. Corollary 1 concerns the autonomous
+regime of Section 1, where a single map is iterated on the state space and the attractor set itself is
+the model's output. The molecular task is intrinsically of this kind: metastable states are properties
+of one landscape, not of an input--output map.
+Remark 2 (The contraction baseline is a diagnostic, not a straw man). Contraction and strong
+monotonicity are not exotic choices; they are the default well-posedness prescription of the DEQ
+literature (Winston \& Kolter, 2020; Revay et al., 2020), the certificates a careful practitioner is
+instructed to install before trusting an equilibrium layer at all. Our claim is that this standard pre-
+scription, transplanted unmodified into the autonomous regime, fails silently: the collapsed model
+in Section 6 converges cleanly from every initialization with zero residual --- by every solver diag-
+nostic the run looks healthy --- while representing no metastable state of the data and freezing its
+own training loss. Appendix G states the objection and our reply in full.
+EquiPhase forgoes exactly that certificate and replaces it with a weaker, physically meaningful one:
+dissipativity (Proposition 1) plus empirical convergence diagnostics reported per run. Section 6
+shows both halves of this trade empirically: our verified-contraction baseline collapses precisely as
+Proposition 2 mandates, while EquiPhase recovers the multistable structure of real molecular data.
+EXPERIMENT 1: SYNTHETIC DOUBLE-WELL WITH ANALYTICAL GROUND
+TRUTH
+We first validate on a 32-dimensional anisotropic double-well potential whose minima ($\pm$$\sqrt{}$$\alpha$ e1),
+saddle points, and barrier height (0.2275) are known in closed form, so every empirical claim can be
+scored against an analytical answer. The residual network vnet is a small MLP (34$\to$64$\to$1; 2305
+parameters). Under a preregistered gate battery (seed 7777): the structural symmetry and identity
+gates hold to tolerances of order 10$-$9; two attractors are recovered (N = 2) with contraction factors
+$\rho$ = 0.9626/0.9628 against the corrected theoretical value 0.96273; and the measured escape barrier
+0.230111 exceeds the analytical barrier 0.2275, consistent with the learned residual steepening the
+well walls. Two preregistered stress disclosures accompany these results: at the boundary setting
+$\alpha$ = 1.2 one gate exceeds its per-$\alpha$ limit by 1.0 $\times$ 10$-$5, and 1 of 100 novel-seed initializations
+diverges; both are reported as limits of the method rather than removed. Under the same protocol,
+an unconstrained vanilla DEQ fails to converge (0/100 initializations; residual $\approx$5.9 $\times$ 10$-$3, $\rho$ $\approx$
+0.9999), and a monotone DEQ collapses to a single attractor with its training loss frozen --- the same
+qualitative signature that reappears on molecular data in Section 6. Appendix B tabulates all values
+against their analytical targets.
+EXPERIMENT 2: ALANINE DIPEPTIDE
+Setup. We use the mdshare alanine dipeptide backbone-dihedral dataset (Computational Molecu-
+lar Biology Group, FU Berlin (No\'e group), 2017) (three independent 250 ns trajectories; 750,000
+frames of ($\phi$, $\psi$) in radians), pinned by SHA-256 and re-verified at every run. The potential V$\theta$
+is a small MLP over the periodic embedding [sin $\phi$, cos $\phi$, sin $\psi$, cos $\psi$], trained by denoising score
+matching ($\sigma$ = 0.15 rad, 3000 Adam (Kingma \& Ba, 2015) steps, batch 4096) on five preregistered
+seeds. Attractors are found by deterministic gradient descent from a 24$\times$24 grid; basins are assigned
+to macrostates ($\beta$, $\alpha$R, $\alpha$L) by preregistered angular regions.
+\clearpage
+
+% ================= PAGE 06 =================
+
+\begin{figure}[t]\centering\includegraphics[width=0.85\linewidth]{figures/fig1_landscape.png}\caption{MD dihedral density (750k frames) with the five attractors recovered by EquiPhase (seed}\end{figure}
+7777) overlaid. Filled markers: physical states ($\beta$, C5/$\beta$ sub-mode, $\alpha$R, $\alpha$L); hollow marker: dis-
+closed high-V artifact.
+Preregistered gates. R1: attractors in both $\beta$ and $\alpha$R; R2: locations within $\pm$25$^\circ$(per axis, periodic)
+of data-derived anchors ($-$72.5$^\circ$, +152.5$^\circ$) and ($-$72.5$^\circ$, $-$17.5$^\circ$); R3: V ($\beta$) < V ($\alpha$R) with a
+0.05 kBT margin; R4: baseline separation; R5 (exploratory): detection of the rare $\phi$ > 0 state.
+Aggregation (fixed before execution): pass requires $\ge$4/5 seeds.
+Results. EquiPhase passes R1, R2, and R3 in 5/5 seeds (Figures 1 and 2; Table 1). Recovered
+basins reproduce the fine structure of the landscape: both $\beta$-branch sub-modes (near ($-$73$^\circ$, +153$^\circ$)
+and ($-$141$^\circ$, +158$^\circ$)) and the $\alpha$R basin (near ($-$78$^\circ$, $-$15$^\circ$)) appear consistently across seeds. The
+learned free-energy gap $\Delta$F($\alpha$R$-$$\beta$) ranges over 0.54--0.84 kBT across seeds. Post-hoc observation
+(not a preregistered gate): this bracket contains the value 0.71 kBT obtained by an independent
+histogram estimate on the same data. In 5/5 seeds the model additionally places an attractor in
+the rare $\alpha$L region at approximately (+53$^\circ$, +31$^\circ$) (R5), although this region holds only 3.0\% of
+frames and was not isolated as a mode by our 72 $\times$ 72 density EDA; a second, high-V attractor near
+(+58$^\circ$, +175$^\circ$) appears in all seeds and is disclosed as a probable shallow artifact (Section 7 states
+the identification criterion).
+Baselines, reported in full. The vanilla score network (same budget, seed 7777) also places at-
+tractors near the physical basins, so the preregistered gate R4b fails, and we report this: in a two-
+dimensional collective-variable space, localization is easy. What the unconstrained field cannot
+provide is a potential: its mean absolute curl is 1.67, so no scalar V exists whose gradient matches
+it, and gate R3 is undefined for it. (A potential can of course be extracted from a non-conservative
+field post hoc, e.g., by Helmholtz projection; the resulting surface then depends on the projection
+and inherits no consistency guarantee. A sealed comparison against exactly such a projected base-
+line is preregistered as follow-up experiment E-A in Appendix D.) The monotone baseline, after
+correcting an auditor-side implementation error (documented in the audit ledger; the first version
+scaled its correction by 0.9$\pi$ and was not a contraction), is a verified contraction (theoretical bound
+0.95; empirical Lipschitz maximum 0.788) and behaves exactly as Banach's theorem requires: ev-
+ery one of 576 initializations converges (residual 0.0) to one non-physical fixed point (Figure 3),
+with training loss frozen at 0.712. Uniqueness guarantees and multistable physics are not jointly
+achievable in the autonomous regime; our results quantify what each side of that trade costs.
+\clearpage
+
+% ================= PAGE 07 =================
+
+Table 1: Alanine dipeptide: preregistered gate outcomes and capability comparison. All numbers
+verbatim from sealed runs; ``---'' denotes undefined for that model class. R4b is a preregistered
+failure and is reported as such.
+EquiPhase DEQ
+Vanilla score net
+Monotone DEQ (verified)
+R1 basins $\beta$, $\alpha$R
+found 5/5 seeds
+yes (seed 7777)
+no (N=1 collapse)
+R2 location $\pm$25$^\circ$
+5/5 seeds
+near basins (R4b fails)
+no; ($-$50.1$^\circ$, +18.5$^\circ$)
+R3 ordering V ($\beta$)<V ($\alpha$R)
+5/5 seeds
+--- (no potential)
+---
+$\Delta$F($\alpha$R$-$$\beta$)
+0.54--0.84 kBT
+---
+---
+R5 rare $\alpha$L (3.0\%)
+5/5 seeds
+---
+no
+Mean absolute curl of field
+0 (by construction)
+1.67
+---
+Training loss
+0.019
+---
+0.712 (frozen)
+Attractors (576 grid inits)
+5 (4 physical + 1 disclosed)
+---
+1 (residual 0.0)
+Lipschitz certificate
+forgone by design
+none
+0.788 < 0.95 < 1
+\par\vspace{1em}\noindent\begin{center}\refstepcounter{figure}\includegraphics[width=0.85\linewidth]{figures/fig2_synthetic.png}\\\small\textbf{Figure \thefigure:} Learned potential V$\theta$($\phi$, $\psi$), seed 7777. Basin minima and their depths, restated here for print legibility: $\beta$ basin at ($-$72.8$^\circ$, +153.4$^\circ$) with V ($\beta$) = $-$10.45 kBT; $\alpha$R basin at ($-$77.6$^\circ$, $-$15.0$^\circ$) with V ($\alpha$R) = $-$9.64 kBT; hence $\Delta$F = +0.81 kBT with the correct or- dering V ($\beta$) < V ($\alpha$R). The rare $\alpha$L state (3.0\% occupancy) forms a distinct local minimum at (+52.3$^\circ$, +32.8$^\circ$).\end{center}\vspace{1em}
+DISCUSSION: POSITIONING, VALUE OVER DENSITY ESTIMATION, AND
+ARTIFACT IDENTIFICATION
+Relation to the Markov-state-modeling toolchain.
+MSM/PyEMMA pipelines (Chodera \& No\'e,
+2014; Scherer et al., 2015) and VAMPnets (Mardt et al., 2018; Wu \& No\'e, 2020) already identify
+metastable states from trajectories, so we state precisely what EquiPhase adds and what it does not.
+The MSM family answers a kinetic question: it discretizes or embeds the trajectory, estimates a
+transition operator, and extracts metastable sets and interconversion timescales from its spectrum.
+EquiPhase answers a representational one: it produces a single differentiable scalar field whose
+critical points are the model's states, on which relaxation from an arbitrary configuration, basin
+membership, and depth comparison are defined by construction rather than by a post-hoc clustering
+\clearpage
+
+% ================= PAGE 08 =================
+
+\begin{figure}[t]\centering\includegraphics[width=0.85\linewidth]{figures/fig3_baselines.png}\caption{Verified Banach contraction (theoretical bound 0.95; empirical Lipschitz max 0.788):}\end{figure}
+all 576 initializations collapse to one non-physical fixed point ($-$50.1$^\circ$, +18.5$^\circ$) (left), versus
+EquiPhase multistable branching to physical basins (right; all five attractors shown).
+step. The two are complementary, not competing: an MSM assigns no energy to an off-trajectory
+configuration and supports no gradient flow, while EquiPhase makes no kinetic claims whatsoever
+--- transition rates and timescales are outside our gate battery by design (disclosure D11'). A sealed,
+preregistered comparison in which both toolchains are run on the identical hash-pinned dataset and
+scored on state recovery is specified as follow-up E-D' in Appendix D; consistent with the FILL
+principle, no comparative numbers appear here because none have been produced under seal.
+What the model buys over a histogram or KDE.
+In two dimensions with 750k frames, den-
+sity estimation is not the hard part, and we do not claim otherwise; the post-hoc agreement of our
+$\Delta$F bracket (0.54--0.84 kBT) with the independent histogram estimate (0.71 kBT) is reported as a
+consistency check, not as a win. The claims that a histogram cannot support are structural. First,
+executability: a binned density is not a dynamical system; EquiPhase is one, and its attractor set is
+provably identical to the critical-point set of V$\theta$ (Appendix A), so ``which basin does this configu-
+ration relax into'' is answered by running the model, mesh-free and without a cell-assignment rule.
+Second, consistency: the field is curl-free by construction, so the depth comparison of gate R3 is
+well-defined --- precisely the readout that the vanilla score baseline (curl 1.67) cannot support and
+that a histogram supports only at its chosen bin resolution. Third, and empirically the sharpest point
+in our results: resolution where mass is scarce. Our own preregistered 72 $\times$ 72 histogram EDA
+failed to isolate the $\alpha$L mode at 3.0\% occupancy, while the learned potential places an attractor in
+that region in 5/5 seeds. We are careful about what this does and does not show: it does not show
+that no density estimator could find the state (a finer or adaptive estimator might), but it does show
+that the smooth parametric surface resolved structure that our preregistered mesh-based analysis of
+the same data missed --- and the honest test of whether this advantage survives dimensionality is
+exactly experiment E-D of Appendix D.
+How the disclosed artifact was identified, and the criterion's limit.
+Table 1 reports 5 attractors,
+disclosed as 4 physical plus 1 probable artifact, and a reviewer is entitled to ask by what rule the
+split was made --- if the answer is ``we looked at the data density,'' the independent value of attractor
+discovery is compromised. The rule actually applied is the preregistered one: basin assignment
+to macrostates is by the angular regions fixed in the preregistration (Appendix B), and the four
+attractors labeled physical are those falling in the $\beta$, C5/$\beta$, $\alpha$R, and $\alpha$L regions, while the fifth, near
+(+58$^\circ$, +175$^\circ$), falls in no preregistered macrostate region and sits at high V relative to the named
+basins --- hence ``probable shallow artifact,'' a model-internal designation that does not consult the
+raw density post hoc. We disclose the criterion's limit with equal clarity: region membership is
+a coarse classifier, and a preregistered depth-margin criterion (an attractor must be deeper than a
+margin fixed in advance, in units of kBT, to be labeled a state) would be stronger. Committing to
+such a threshold now, after seeing the landscape, would be post-hoc; it is therefore specified as part
+\clearpage
+
+% ================= PAGE 09 =================
+
+of the preregistration amendment for follow-up E-B in Appendix D, to be fixed before any new run
+executes (disclosure D10').
+LIMITATIONS AND DISCLOSURES
+In accordance with our preregistered auditing protocol we disclose the scope boundaries, architec-
+tural assumptions, and methodological limits of this work. Items D0'--D7' are the preregistered
+disclosures; D8'--D9' were added during manuscript revision v2, and D10'--D11' during revision
+v4. The full, unabridged text of every item is reproduced verbatim in Appendix F; nothing is
+withheld by the compression below.
+$\bullet$  D0' (synthetic disclosures carried over): the six preregistered disclosure items of the
+synthetic experiment apply to Section 5 in full.
+$\bullet$  D1' (provided collective variables): input is restricted to predefined 2D dihedrals ($\phi$, $\psi$);
+this is not a test of unsupervised collective-variable discovery.
+$\bullet$  D2' (no analytical prior on molecular data): V$\theta$ is learned alone for alanine dipeptide, so
+the prior layer of Section 3 is only partially applicable.
+$\bullet$  D3' (1D barrier proxy scope): the Phase-1 proxy measures intra-branch density fluctua-
+tion, not the 2D minimum-free-energy-path saddle; no quantitative barrier claim is made.
+$\bullet$  D4' (single molecular system): validation is exclusively on alanine dipeptide (750,000
+frames); no generalization claim is made, and follow-up E-D is the preregistered path to
+lifting this boundary.
+$\bullet$  D5' (full disclosure of exploratory $\alpha$L results): $\alpha$L recovered at (+52.3$^\circ$, +32.8$^\circ$) in 5/5
+seeds, alongside a second high-V attractor at (+59.7$^\circ$, +170.9$^\circ$) disclosed as a probable
+shallow artifact.
+$\bullet$  D6' (auditor implementation Error \#5): the first monotone implementation scaled its
+update by 0.9$\pi$ $\approx$2.83 and was not a contraction; corrected in Version 2 (bound 0.95;
+empirical 0.788 < 1), which produced the verified N = 1 collapse.
+$\bullet$  D7' (audit incident log): all incidents INC-01 through INC-25 and the sealed script hash
+manifests are preserved in the anonymous repository.
+$\bullet$  D8' (density--potential equivalence; v2): V estimates the $\sigma$-smoothed negative log-
+density; R3 is a claim about the implied free-energy landscape, not about physical infor-
+mation beyond the data.
+$\bullet$  D9' (baseline parity; v2): both baselines share the main model's budget and seed; the
+monotone baseline's frozen loss 0.712 reflects the certified constraint, not an untuned im-
+plementation.
+$\bullet$  D10' (artifact criterion coarseness; v4): the physical/artifact split uses only macrostate
+region membership and relative V ; a preregistered depth-margin criterion is deferred to the
+E-B amendment.
+$\bullet$  D11' (no kinetic claims; v4): no claims are made about transition rates, timescales, or
+pathways; the quantitative MSM comparison is confined to follow-up E-D'.
+CONCLUSION
+Convergence certificates built on global contraction are incompatible with multistable physics in the
+autonomous equilibrium regime: this is a theorem, and we made it an experiment. On real molecular
+data, an equilibrium model that trades the uniqueness certificate for a dissipative conservative struc-
+ture recovers the metastable architecture of alanine dipeptide --- including a state occupying 3.0\%
+of the data --- across all preregistered seeds, while a verified contraction collapses to a single non-
+physical point. We also report where structure does not help: an unconstrained score field locates the
+same basins, and what it cannot do is integrate to a potential. We believe the practice demonstrated
+here --- preregistered gates (Nosek et al., 2018), hash-sealed evaluation, and full reporting of failed
+hypotheses and of our own auditing errors, in the spirit of the reproducibility literature (Pineau et al.,
+2021; Kapoor \& Narayanan, 2023) --- is as much a contribution as the architecture.
+\clearpage
+
+% ================= PAGE 10 =================
+
+AI USE STATEMENT
+This work used large language models (LLMs) extensively and under an explicit integrity protocol,
+which we disclose in full. (i) Verification and evaluation code. All scripts that produce quanti-
+tative claims (data audit, training-and-gate evaluation, and the corrected contraction re-test) were
+authored by an LLM acting as an external auditor, hash-sealed (SHA-256) before execution, and
+executed without modification; every reported number traces to the verbatim stdout of a sealed run.
+(ii) Manuscript text. Section drafts were generated by the auditor LLM from sealed outputs only;
+a second LLM agent performed repository execution, assembly, and documentation. (iii) Bibliog-
+raphy. Reference entries drafted by an LLM initially contained five defective entries (including
+one non-existent title); these were detected by independent verification against primary sources,
+corrected, and the incident recorded. All entries added in revision were re-verified against primary
+sources under the same protocol. (iv) Oversight and accountability. A human-maintained audit
+ledger records every detected LLM-produced falsehood, reconstruction, or protocol deviation in this
+project, including one auditor-side implementation error disclosed in Section 8. The human author
+made all research decisions, executed or directly supervised all runs, visually verified all figures,
+and takes full responsibility for the final content of this work, including all text, claims, and artifacts
+produced with AI assistance.
+REPRODUCIBILITY STATEMENT
+The dataset is the public mdshare alanine dipeptide dihedral archive (Computational Molecular Bi-
+ology Group, FU Berlin (No\'e group), 2017), pinned by SHA-256 (F5AD3076...D4CD5717) and
+re-verified inside every sealed script before any computation (hash mismatch aborts the run). Train-
+ing and evaluation are fully deterministic given the preregistered seeds (7777, 1234, 2026, 31415,
+65537); hyperparameters are frozen inside the sealed scripts, and all models are implemented in Py-
+Torch (Paszke et al., 2019). An anonymous repository accompanying this submission contains: the
+preregistration (fixed before any training run, with one amendment sealed before first execution), all
+sealed scripts with their SHA-256 manifest, the verbatim stdout evidence logs of the two evaluation
+runs, and the audit incident ledger. The synthetic-system results in Section 5 are reproduced by the
+corresponding sealed audit script under seed 7777.
+REFERENCES
+Akshay Agrawal, Brandon Amos, Shane Barratt, Stephen Boyd, Steven Diamond, and J. Zico Kolter.
+Differentiable convex optimization layers. In Advances in Neural Information Processing Systems
+(NeurIPS), 2019.
+Brandon Amos and J. Zico Kolter. OptNet: Differentiable optimization as a layer in neural networks.
+In International Conference on Machine Learning (ICML), 2017.
+Donald G. Anderson. Iterative procedures for nonlinear integral equations. Journal of the ACM, 12
+(4):547--560, 1965.
+Shaojie Bai, J. Zico Kolter, and Vladlen Koltun. Deep equilibrium models. In Advances in Neural
+Information Processing Systems (NeurIPS), 2019.
+Shaojie Bai, Vladlen Koltun, and J. Zico Kolter. Multiscale deep equilibrium models. In Advances
+in Neural Information Processing Systems (NeurIPS), 2020.
+Shaojie Bai, Vladlen Koltun, and J. Zico Kolter. Stabilizing equilibrium models by Jacobian regu-
+larization. In International Conference on Machine Learning (ICML), 2021.
+Stefan Banach. Sur les op\'erations dans les ensembles abstraits et leur application aux \'equations
+int\'egrales. Fundamenta Mathematicae, 3:133--181, 1922.
+J\"org Behler and Michele Parrinello. Generalized neural-network representation of high-dimensional
+potential-energy surfaces. Physical Review Letters, 98:146401, 2007.
+Charles G. Broyden. A class of methods for solving nonlinear simultaneous equations. Mathematics
+of Computation, 19:577--593, 1965.
+\clearpage
+
+% ================= PAGE 11 =================
+
+Ricky T. Q. Chen, Yulia Rubanova, Jesse Bettencourt, and David Duvenaud. Neural ordinary dif-
+ferential equations. In Advances in Neural Information Processing Systems (NeurIPS), 2018.
+Zhengdao Chen, Jianyu Zhang, Martin Arjovsky, and L\'eon Bottou. Symplectic recurrent neural
+networks. In International Conference on Learning Representations (ICLR), 2020.
+John D. Chodera and Frank No\'e. Markov state models of biomolecular conformational dynamics.
+Current Opinion in Structural Biology, 25:135--144, 2014.
+Computational Molecular Biology Group, FU Berlin (No\'e group). mdshare: Molecular dynam-
+ics datasets for the community. https://github.com/markovmodel/mdshare, 2017.
+Alanine dipeptide backbone-dihedral archive; accessed 2026, pinned by SHA-256 in the sealed
+scripts.
+Miles Cranmer, Sam Greydanus, Stephan Hoyer, Peter Battaglia, David Spergel, and Shirley Ho.
+Lagrangian neural networks. arXiv preprint arXiv:2003.04630, 2020.
+Yilun Du and Igor Mordatch. Implicit generation and modeling with energy-based models. In
+Advances in Neural Information Processing Systems (NeurIPS), 2019.
+Emilien Dupont, Arnaud Doucet, and Yee Whye Teh. Augmented neural ODEs. In Advances in
+Neural Information Processing Systems (NeurIPS), 2019.
+Laurent El Ghaoui, Fangda Gu, Bertrand Travacca, Armin Askari, and Alicia Tsai. Implicit deep
+learning. SIAM Journal on Mathematics of Data Science, 3(3):930--958, 2021.
+Guilherme Fran\c{c}a, Jeremias Sulam, Daniel P. Robinson, and Ren\'e Vidal. Conformal symplectic
+and relativistic optimization. In Advances in Neural Information Processing Systems (NeurIPS),
+2020.
+Samy Wu Fung, Howard Heaton, Qiuwei Li, Daniel McKenzie, Stanley Osher, and Wotao Yin. JFB:
+Jacobian-free backpropagation for implicit networks. In Proceedings of the AAAI Conference on
+Artificial Intelligence, 2022.
+Zhengyang Geng, Xin-Yu Zhang, Shaojie Bai, Yisen Wang, and Zhouchen Lin. On training implicit
+models. In Advances in Neural Information Processing Systems (NeurIPS), 2021.
+Davis Gilton, Gregory Ongie, and Rebecca Willett.
+Deep equilibrium architectures for inverse
+problems in imaging. IEEE Transactions on Computational Imaging, 7:1123--1133, 2021.
+Will Grathwohl, Kuan-Chieh Wang, J\"orn-Henrik Jacobsen, David Duvenaud, Mohammad Norouzi,
+and Kevin Swersky. Your classifier is secretly an energy based model and you should treat it like
+one. In International Conference on Learning Representations (ICLR), 2020.
+Samuel Greydanus, Misko Dzamba, and Jason Yosinski. Hamiltonian neural networks. In Advances
+in Neural Information Processing Systems (NeurIPS), 2019.
+Ernst Hairer, Christian Lubich, and Gerhard Wanner. Geometric Numerical Integration: Structure-
+Preserving Algorithms for Ordinary Differential Equations. Springer, 2nd edition, 2006.
+Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffusion probabilistic models. In Advances
+in Neural Information Processing Systems (NeurIPS), 2020.
+Scott A. Hollingsworth and Ron O. Dror. Molecular dynamics simulation for all. Neuron, 99(6):
+1129--1143, 2018.
+John J. Hopfield. Neural networks and physical systems with emergent collective computational
+abilities. Proceedings of the National Academy of Sciences, 79(8):2554--2558, 1982.
+Aapo Hyv\"arinen. Estimation of non-normalized statistical models by score matching. Journal of
+Machine Learning Research, 6:695--709, 2005.
+John Jumper, Richard Evans, Alexander Pritzel, Tim Green, Michael Figurnov, Olaf Ronneberger,
+Kathryn Tunyasuvunakool, Russ Bates, Augustin \v{Z}\'idek, Anna Potapenko, et al. Highly accurate
+protein structure prediction with AlphaFold. Nature, 596:583--589, 2021.
+\clearpage
+
+% ================= PAGE 12 =================
+
+Sayash Kapoor and Arvind Narayanan. Leakage and the reproducibility crisis in machine-learning-
+based science. Patterns, 4(9):100804, 2023.
+George E. Karniadakis, Ioannis G. Kevrekidis, Lu Lu, Paris Perdikaris, Sifan Wang, and Liu Yang.
+Physics-informed machine learning. Nature Reviews Physics, 3:422--440, 2021.
+Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In International
+Conference on Learning Representations (ICLR), 2015.
+Dmitry Krotov and John J. Hopfield. Dense associative memory for pattern recognition. In Advances
+in Neural Information Processing Systems (NeurIPS), 2016.
+Yann LeCun, Sumit Chopra, Raia Hadsell, Marc'Aurelio Ranzato, and Fu Jie Huang. A tutorial on
+energy-based learning. In Predicting Structured Data. MIT Press, 2006.
+Ben Leimkuhler and Charles Matthews. Molecular Dynamics: With Deterministic and Stochastic
+Numerical Methods. Springer, 2015.
+Advaith Maddipatla, Nadav Sellam Bojan, Meital Bojan, Volodymyr Masalitin, Sanketh Vedula,
+Paul Schanda, Ailie Marx, and Alex M. Bronstein.
+Experiment-guided AlphaFold3 resolves
+measurement-consistent protein ensembles.
+Nature Biotechnology, 2026.
+doi:
+10.1038/
+s41587-026-03166-5. Published online 29 June 2026.
+Andreas Mardt, Luca Pasquali, Hao Wu, and Frank No\'e. VAMPnets for deep learning of molecular
+kinetics. Nature Communications, 9:5, 2018.
+Frank No\'e, Simon Olsson, Jonas K\"ohler, and Hao Wu. Boltzmann generators: Sampling equilibrium
+states of many-body systems with deep learning. Science, 365(6457):eaaw1147, 2019.
+Frank No\'e, Alexandre Tkatchenko, Klaus-Robert M\"uller, and Cecilia Clementi. Machine learning
+for molecular simulation. Annual Review of Physical Chemistry, 71:361--390, 2020.
+Brian A. Nosek, Charles R. Ebersole, Alexander C. DeHaven, and David T. Mellor. The preregis-
+tration revolution. Proceedings of the National Academy of Sciences, 115(11):2600--2606, 2018.
+Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor
+Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al. PyTorch: An imperative style,
+high-performance deep learning library. In Advances in Neural Information Processing Systems
+(NeurIPS), 2019.
+Guillermo P\'erez-Hern\'andez, Fabian Paul, Toni Giorgino, Gianni De Fabritiis, and Frank No\'e. Iden-
+tification of slow molecular order parameters for Markov model construction. The Journal of
+Chemical Physics, 139(1):015102, 2013.
+Joelle Pineau, Philippe Vincent-Lamarre, Koustuv Sinha, Vincent Larivi\`ere, Alina Beygelzimer,
+Florence d'Alch\'e Buc, Emily Fox, and Hugo Larochelle. Improving reproducibility in machine
+learning research: A report from the NeurIPS 2019 reproducibility program. Journal of Machine
+Learning Research, 22(164):1--20, 2021.
+Maziar Raissi, Paris Perdikaris, and George E. Karniadakis. Physics-informed neural networks: A
+deep learning framework for solving forward and inverse problems involving nonlinear partial
+differential equations. Journal of Computational Physics, 378:686--707, 2019.
+Hubert Ramsauer, Bernhard Sch\"afl, Johannes Lehner, Philipp Seidl, Michael Widrich, Thomas
+Adler, Lukas Gruber, Markus Holzleitner, Milena Pavlovi´c, Geir Kjetil Sandve, Victor Greiff,
+David Kreil, Michael Kopp, G\"unter Klambauer, Johannes Brandstetter, and Sepp Hochreiter.
+Hopfield networks is all you need. In International Conference on Learning Representations
+(ICLR), 2021.
+Max Revay, Ruigang Wang, and Ian R. Manchester. Lipschitz bounded equilibrium networks. arXiv
+preprint arXiv:2010.01732, 2020.
+Ernest K. Ryu and Stephen Boyd. A primer on monotone operator methods. Applied and Computa-
+tional Mathematics, 15(1):3--43, 2016.
+\clearpage
+
+% ================= PAGE 13 =================
+
+Tim Salimans and Jonathan Ho. Should EBMs model the energy or the score? In Energy Based
+Models Workshop, International Conference on Learning Representations (ICLR), 2021.
+Saeed Saremi, Arash Mehrjou, Bernhard Sch\"olkopf, and Aapo Hyv\"arinen. Deep energy estimator
+networks. arXiv preprint arXiv:1805.08306, 2018.
+Martin K. Scherer, Benjamin Trendelkamp-Schroer, Fabian Paul, Guillermo P\'erez-Hern\'andez,
+Moritz Hoffmann, Nuria Plattner, Christoph Wehmeyer, Jan-Hendrik Prinz, and Frank No\'e.
+PyEMMA 2: A software package for estimation, validation, and analysis of Markov models.
+Journal of Chemical Theory and Computation, 11(11):5525--5542, 2015.
+Kristof T. Sch\"utt, Pieter-Jan Kindermans, Huziel E. Sauceda, Stefan Chmiela, Alexandre
+Tkatchenko, and Klaus-Robert M\"uller. SchNet: A continuous-filter convolutional neural net-
+work for modeling quantum interactions. In Advances in Neural Information Processing Systems
+(NeurIPS), 2017.
+Yang Song and Stefano Ermon. Generative modeling by estimating gradients of the data distribution.
+In Advances in Neural Information Processing Systems (NeurIPS), 2019.
+Yang Song and Diederik P. Kingma.
+How to train your energy-based models.
+arXiv preprint
+arXiv:2101.03288, 2021.
+Yang Song, Sahaj Garg, Jiaxin Shi, and Stefano Ermon. Sliced score matching: A scalable approach
+to density and score estimation. In Uncertainty in Artificial Intelligence (UAI), 2019.
+Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Stefano Ermon, and Ben
+Poole. Score-based generative modeling through stochastic differential equations. In Interna-
+tional Conference on Learning Representations (ICLR), 2021.
+Loup Verlet. Computer ``experiments'' on classical fluids. I. thermodynamical properties of Lennard-
+Jones molecules. Physical Review, 159:98--103, 1967.
+Pascal Vincent. A connection between score matching and denoising autoencoders. Neural Compu-
+tation, 23(7):1661--1674, 2011.
+Jiang Wang, Simon Olsson, Christoph Wehmeyer, Adrià P\'erez, Nicholas E. Charron, Gianni De Fab-
+ritiis, Frank No\'e, and Cecilia Clementi. Machine learning of coarse-grained molecular dynamics
+force fields. ACS Central Science, 5(5):755--767, 2019.
+Ezra Winston and J. Zico Kolter. Monotone operator equilibrium networks. In Advances in Neural
+Information Processing Systems (NeurIPS), 2020.
+Hao Wu and Frank No\'e. Variational approach for learning Markov processes from time series data.
+Journal of Nonlinear Science, 30:23--66, 2020.
+Yaofeng Desmond Zhong, Biswadip Dey, and Amit Chakraborty. Symplectic ODE-Net: Learning
+Hamiltonian dynamics with control. In International Conference on Learning Representations
+(ICLR), 2020.
+\clearpage
+
+% ================= PAGE 14 =================
+
+A
+PROOFS
+A.1
+PROOF OF PROPOSITION 1
+Write one step (1)--(3) as a map (qt, pt) 7$\to$(qt+1, pt+1) and let H = $\nabla$2V (q1/2) (symmetric)
+and a = $\Delta$t2/2m. Differentiating, $\partial$q1/2/$\partial$qt = I and $\partial$q1/2/$\partial$pt =
+$\Delta$t
+2mI, so the block Jacobian
+J = [ A B
+C D ] has
+A = I $-$aH,
+B = $\Delta$t
+2m
+
+(2 $-$$\eta$)I $-$aH
+
+,
+C = $-$$\Delta$t H,
+D = (1 $-$$\eta$)I $-$aH.
+With $\Omega$=
+ 0
+I
+$-$I 0
+
+, the condition J$\top$$\Omega$J = c $\Omega$is equivalent to (i) A$\top$C symmetric, (ii) B$\top$D
+symmetric, (iii) A$\top$D $-$C$\top$B = cI. Since all four blocks are polynomials in the single symmetric
+matrix H, they commute and (i)--(ii) hold. For (iii),
+A$\top$D $-$C$\top$B = (I $-$aH)
+
+(1 $-$$\eta$)I $-$aH
+
++ $\Delta$t H · $\Delta$t
+2m
+
+(2 $-$$\eta$)I $-$aH
+
+= (1 $-$$\eta$)I $-$aH $-$a(1 $-$$\eta$)H + a2H2 + a(2 $-$$\eta$)H $-$a2H2
+= (1 $-$$\eta$)I + aH
+
+$-$1 $-$(1 $-$$\eta$) + (2 $-$$\eta$)
+
+= (1 $-$$\eta$)I,
+so c = 1 $-$$\eta$ and J$\top$$\Omega$J = (1 $-$$\eta$)$\Omega$globally. Taking determinants, det J = (1 $-$$\eta$)d in 2d-
+dimensional phase space, so volume contracts at the constant rate (1 $-$$\eta$) per step.
+$\Box$
+A.2
+PROOF OF PROPOSITION 2
+This is the Banach fixed-point theorem: for a contraction g with constant c < 1 on a complete
+metric space, the iterates zk+1 = g(zk) form a Cauchy sequence for any z0 (since d(zk+1, zk) $\le$
+ckd(z1, z0)), their limit z$*$is a fixed point by continuity, and uniqueness follows from d(z$*$, w$*$) =
+d(g(z$*$), g(w$*$)) $\le$c d(z$*$, w$*$).
+$\Box$
+A.3
+FIXED POINTS COINCIDE WITH CRITICAL POINTS
+At a fixed point of (1)--(3), qt+1 = qt and pt+1 = pt. From (1) and (3), qt+1$-$qt = $\Delta$t
+2m(pt+pt+1) =
+$\Delta$t
+m pt, forcing pt = 0; then (2) with pt+1 = pt = 0 and $\eta$ $\in$(0, 1) forces $\nabla$qV (qt) = 0. Conversely
+any (q$^\star$, 0) with $\nabla$qV (q$^\star$) = 0 is fixed. Hence the attractor set of the model is exactly the set of
+stable critical points of V .
+$\Box$
+B
+GATE DEFINITIONS, FROZEN HYPERPARAMETERS, AND
+SYNTHETIC-SYSTEM TABLE
+All values below restate configuration constants already reported in the main text or frozen inside
+the sealed scripts; no new measurements are introduced.
+B.1
+SYNTHETIC 32-D DOUBLE-WELL: ANALYTICAL TARGETS VS. MEASURED VALUES
+Quantity
+Analytical / theoretical
+Measured
+Status
+Attractor count N
+pass
+Contraction factor $\rho$
+0.96273 (corrected)
+0.9626 / 0.9628
+pass
+Escape barrier
+0.2275
+0.230111
+pass (steepened walls)
+Symmetry / identity gates
+tol. $\sim$10$-$9
+held
+pass
+Boundary $\alpha$ = 1.2 gate
+per-$\alpha$ limit
+excess 1.0 $\times$ 10$-$5
+disclosed
+Novel-seed robustness
+100/100
+99/100 (1 diverged)
+disclosed
+Vanilla DEQ (uncontrolled)
+converge
+0/100; res. $\approx$5.9 $\times$ 10$-$3, $\rho$ $\approx$0.9999
+fail
+Monotone DEQ
+multistable
+N=1 collapse; loss frozen
+fail
+Seed 7777; all numbers verbatim from the sealed audit run.
+\clearpage
+
+% ================= PAGE 15 =================
+
+B.2
+ALANINE DIPEPTIDE CONFIGURATION
+Periodic embedding [sin $\phi$, cos $\phi$, sin $\psi$, cos $\psi$];
+potential V$\theta$ a small MLP; denoising score
+matching
+with
+$\sigma$
+=
+0.15 rad;
+3000
+Adam
+steps;
+batch
+4096;
+preregistered
+seeds
+{7777, 1234, 2026, 31415, 65537}; attractor search by deterministic gradient descent from a 24$\times$24
+grid; basin assignment by preregistered angular macrostate regions; collapse test on a 576-point grid.
+B.3
+GATE BATTERY (VERBATIM FROM PREREGISTRATION)
+R1: at least one attractor inside each of the $\beta$ and $\alpha$R regions. R2: attractor location within $\pm$25$^\circ$per
+axis (periodic distance) of the data-derived anchors ($-$72.5$^\circ$, +152.5$^\circ$) and ($-$72.5$^\circ$, $-$17.5$^\circ$). R3:
+V ($\beta$) < V ($\alpha$R) with margin 0.05 kBT. R4(a/b): separation from the contraction and vanilla-score
+baselines respectively; R4b failed and is reported. R5 (exploratory): detection of the rare $\phi$ > 0
+($\alpha$L) state. Aggregation fixed before execution: pass requires $\ge$4/5 seeds.
+B.4
+SYNTHETIC SYSTEM
+32-dimensional anisotropic double-well; residual MLP 34 $\to$64 $\to$1 (2305 parameters); analyti-
+cal minima $\pm$$\sqrt{}$$\alpha$ e1; analytical barrier 0.2275; gate battery under seed 7777 with structural gates
+G1/G2' at tolerance $\sim$10$-$9.
+C
+BASELINE CONFIGURATIONS AND PARITY
+Both baselines share the alanine-dipeptide training budget of the main model (3000 Adam steps,
+batch 4096, seed 7777) and are implemented in the same sealed evaluation scripts. The monotone
+baseline's contraction is established two ways: a theoretical bound of 0.95 by construction and an
+empirical Lipschitz maximum of 0.788 measured at run time; its first implementation, which scaled
+the update by 0.9$\pi$ $\approx$2.83 and was not a contraction, is disclosed as audit Error \#5 and superseded.
+D
+PREREGISTERED FOLLOW-UP EXPERIMENTS (SPECIFICATIONS; SEALED
+RUNS PENDING)
+This appendix specifies, at preregistration level of detail, the follow-up experiments whose sealed
+execution is pending at the time of this draft. Consistent with the FILL principle governing this
+project, the specifications below contain no experimental numbers beyond configuration constants
+fixed in advance; every result field is marked [TO-RUN] and will be filled verbatim from sealed
+stdout, or the corresponding experiment will be withdrawn from the paper before submission. Each
+experiment requires its own preregistration amendment, sealed (SHA-256) before first execution,
+extending the existing protocol.
+E-A: Helmholtz-projected vanilla baseline (closes the post-hoc-extraction objection).
+Moti-
+vation. Section 6 argues that the vanilla score field (mean absolute curl 1.67) admits no consistent
+potential; the natural objection is that a potential can be extracted post hoc. E-A tests whether such
+an extracted surface supports the same readouts as the structural one. Protocol (fixed in the amend-
+ment before execution): from the trained vanilla score field of the existing sealed run (seed 7777,
+unchanged), compute the Helmholtz decomposition on the periodic ($\phi$, $\psi$) domain via the spectral
+method, take the curl-free component, and integrate it to a scalar surface $\sim$V ; apply gates R1--R3 to
+$\sim$V with the identical anchors, margins, and macrostate regions of Appendix B; report the extracted
+$\Delta$F($\alpha$R$-$$\beta$) and its position relative to the EquiPhase bracket; repeat under at least one alternative
+gauge/projection choice fixed in the amendment, to measure the projection-dependence asserted
+qualitatively in Section 6. Result fields: [TO-RUN] R1/R2/R3 verdicts for $\sim$V ; [TO-RUN] extracted
+$\Delta$F per projection choice; [TO-RUN] inter-projection disagreement.
+E-B: Damping and noise-scale sweeps, with a preregistered depth-margin criterion.
+Protocol:
+(i) $\eta$ over a small grid fixed in the amendment; report attractor count, R1--R3 status, and divergence
+rate per $\eta$. (ii) $\sigma$ $\in${0.05, 0.10, 0.15, 0.25} rad; report basin locations and the $\Delta$F bracket per $\sigma$
+\clearpage
+
+% ================= PAGE 16 =================
+
+(robustness of disclosure D8'). (iii) The amendment for E-B additionally fixes, before execution,
+the depth-margin threshold (in kBT) referenced in disclosure D10', and the physical/artifact classi-
+fication of all recovered attractors is re-scored under it. Result fields: [TO-RUN] all sweep tables;
+[TO-RUN] re-scored attractor classification.
+E-C: Baseline parity transcription.
+Protocol: transcribe verbatim from the existing sealed
+scripts and stdout (no new training) the parity fields enumerated in Appendix C: layer widths and
+parameter counts of both baselines, learning rate, solver iteration budget per initialization, stopping
+criterion, and residual threshold. This is a documentation run, not an experiment; it exists because
+the FILL principle forbids writing these values from memory. Result fields: [TO-RUN] parity table
+in Appendix C.
+E-D: Higher-dimensional collective-variable system (lifts disclosure D4').
+Protocol: a peptide
+system with more than two backbone dihedrals, selected and hash-pinned in the amendment; pe-
+riodic embedding extended per-dihedral; the full gate battery re-derived for the new system with
+anchors computed by the same data-derived procedure as Appendix B and frozen before training;
+the same three-way comparison (EquiPhase / vanilla score / verified contraction) under identical
+budgets. E-D is the experiment in which mesh-based density estimation degrades by construction,
+and is therefore the decisive test of the value proposition argued in Section 7. Result fields: [TO-
+RUN] full gate table for the new system.
+E-D': Sealed comparison against the MSM/VAMPnet toolchain (scoped by disclosure D11').
+Protocol: on the identical hash-pinned alanine dipeptide dataset, run a standard MSM pipeline
+(Scherer et al., 2015) and a VAMPnet (Mardt et al., 2018) with configurations fixed in the amend-
+ment; score both, and EquiPhase, on macrostate recovery against the preregistered regions; report
+agreement and disagreement without ranking, since the toolchains answer different questions (ki-
+netic vs. representational) and the comparison is a positioning exhibit, not a contest. Result fields:
+[TO-RUN] state-recovery agreement table.
+E
+AUDIT LEDGER SUMMARY
+The anonymous repository preserves the full forensic record: the preregistration and its single pre-
+execution amendment; SHA-256 manifests of all sealed scripts; verbatim stdout logs of the two
+evaluation runs (from which every numeral in this paper is copied); and the incident ledger INC-01
+through INC-25, including the bibliography incident (five defective LLM-drafted entries, detected
+and corrected) and auditor Error \#5 (the invalid first contraction, superseded by the verified version
+reported in the main text). Amendments introduced for the follow-up experiments of Appendix D
+will be sealed and appended to the same manifest before any of those runs execute.
+F
+LIMITATIONS AND DISCLOSURES --- UNABRIDGED TEXT
+Section 8 compresses each item to two lines for length. This appendix reproduces the preregistered
+text in full. Items D0'--D7' are the preregistered disclosures; D8'--D9' were added during manuscript
+revision v2, and D10'--D11' during revision v4; all are marked as such.
+$\bullet$  D0' (Synthetic-System Disclosures Carried Over): The six preregistered disclosure
+items of the synthetic experiment (conditional self-verification structure; IFT-to-unrolling
+deviation; integrator naming; the $\alpha$ = 1.2 boundary excess; the 1/100 divergent initializa-
+tion; Set-A separation) apply to Section 5 in full.
+$\bullet$  D1' (Provided Collective Variables): Model input is restricted to predefined 2D backbone
+dihedrals ($\phi$, $\psi$). This benchmark evaluates the model's capacity to represent multistable
+energy landscapes and relative free energies, not unsupervised collective variable discovery.
+$\bullet$  D2' (Absence of Analytical Prior on Molecular Data): While the synthetic system lever-
+ages a hybrid potential Vtotal = Vbase+vnet, no analytical prior exists for alanine dipeptide;
+the learned potential is parameterized purely by the network, rendering the prior layer only
+partially applicable.
+\clearpage
+
+% ================= PAGE 17 =================
+
+$\bullet$  D3' (EDA 1D Barrier Proxy Scope): The 1D $\phi$ density barrier proxy derived in our Phase-
+1 EDA measures intra-branch density fluctuations rather than the 2D minimum free-energy
+path saddle point. Consequently, quantitative barrier claims are avoided, and only relative
+macrostate depth ordering (R3) is evaluated.
+$\bullet$  D4' (Single Molecular System Boundary): Empirical validation is performed exclu-
+sively on alanine dipeptide (750,000 frames). We make no claims regarding generaliza-
+tion to higher-dimensional protein dynamics or multi-protein datasets; follow-up E-D (Ap-
+pendix D) is the preregistered path to lifting this boundary.
+$\bullet$  D5' (Full Disclosure of Exploratory $\alpha$L Results): All exploratory R5 results are reported
+in full. The model recovers the physical $\alpha$L state ((+52.3$^\circ$, +32.8$^\circ$), 3.0\% data population)
+across 5/5 seeds, alongside a second high-V attractor near (+59.7$^\circ$, +170.9$^\circ$) disclosed as
+a probable shallow artifact.
+$\bullet$  D6' (Auditor Implementation Error \#5 Disclosure): In Phase-2 baseline evaluation, the
+initial Monotone DEQ implementation scaled its update by 0.9$\pi$ $\approx$2.83, violating the
+contractive theorem premise. This error was logged in the audit ledger (Error \#5) and
+corrected in Version 2 (theoretical bound 0.95; empirical Lipschitz maximum 0.788 < 1),
+which produced the verified N = 1 Banach collapse.
+$\bullet$  D7' (Audit Incident Log): All forensic audit incidents (INC-01 through INC-25) and
+sealed script hash manifests are preserved in the anonymous repository accompanying this
+submission.
+$\bullet$  D8' (Density--Potential Equivalence; added in revision): As stated in Section 3, the
+learned V estimates the $\sigma$-smoothed negative log-density over the provided collective vari-
+ables. R3 is a claim about the free-energy landscape implied by the data, not about physical
+information beyond it; the contribution is the existence of a consistent, differentiable, curl-
+free surface supporting attractor dynamics, established under adversarial gates.
+$\bullet$  D9' (Baseline Parity; added in revision): The vanilla score baseline uses the same train-
+ing budget and seed as reported; the monotone baseline's frozen loss (0.712) reflects the
+certified contraction constraint, not an untuned implementation --- the certificate itself is
+what forbids the map from placing attractors at the data modes. Full baseline configura-
+tions are frozen inside the sealed scripts (Appendix C).
+$\bullet$  D10' (Artifact Criterion Coarseness; added in revision v4): The physical/artifact split
+of the five recovered attractors uses only preregistered macrostate region membership and
+relative V (Section 7); a stronger preregistered depth-margin criterion is deferred to the
+E-B amendment so that its threshold is fixed before, not after, any run that it will judge.
+$\bullet$  D11' (No Kinetic Claims; added in revision v4): EquiPhase makes no claims about tran-
+sition rates, interconversion timescales, or pathways; the comparison to kinetic toolchains
+(Section 7) is representational only, and its quantitative counterpart is confined to the pre-
+registered follow-up E-D' with no numbers reported in this paper.
+G
+THE CONTRACTION BASELINE: OBJECTION AND REPLY IN FULL
+Remark 2 compresses the following for length.
+One may object that no practitioner deliberately deploys a contractive DEQ as a multistable land-
+scape model, so defeating one proves little. We disagree with the framing. Contraction and strong
+monotonicity are not exotic choices; they are the default well-posedness prescription of the DEQ
+literature (Winston \& Kolter, 2020; Revay et al., 2020), the certificates a careful practitioner is
+instructed to install before trusting an equilibrium layer at all. Our claim is that this standard pre-
+scription, transplanted unmodified into the autonomous regime, fails silently: the collapsed model in
+Section 6 converges cleanly from every initialization with zero residual --- by every solver diagnos-
+tic the run looks healthy --- while representing no metastable state of the data and freezing its own
+training loss. The baseline therefore functions as a diagnostic exhibit of a failure mode that would
+not announce itself, quantified under the same sealed protocol as the proposed model, rather than as
+an adversary constructed to lose. The constructive half of the paper is precisely what one must give
+up (the global certificate) and what one can keep instead (dissipativity, Proposition 1) to make the
+autonomous regime well-behaved without forcing N = 1.
+\end{document}

@@ -1,0 +1,28 @@
+{
+    "Gate_F1_Negative_Control": {
+        "Passed": true,
+        "N_attr": 1,
+        "Max_Abs_V_anc_nats": 7.8463616371154785,
+        "Max_Safety_Factor_ssf": 0.0034201845338072963,
+        "Phase": "paramagnetic"
+    },
+    "Gate_F2_F3_Recovery_AntiFragmentation": {
+        "Continuous_Basin_Count": 6,
+        "Discrete_ELA_Basin_Count": 6,
+        "Discrete_r_D": 0.8749124875176905,
+        "Anti_Fragmentation_Verdict": "PASS (Continuous unified vs Discrete fragmented)"
+    },
+    "Gate_F4_F7_F8": {
+        "Basin_Occupancies_Laplace": [
+            0.20496696927854532,
+            0.2899307033778841,
+            0.023012188118114278,
+            0.22517639261626796,
+            0.009171788109093134,
+            0.24774195850001618
+        ],
+        "Market_Phase": "Spin-Glass-like (Multistable Rugged)",
+        "Early_Warning_Min_Curvature": -0.4683052599430084
+    },
+    "Execution_Time_Seconds": 60.438472747802734
+}

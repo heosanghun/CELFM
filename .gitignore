@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Binary data
+*.tar.gz
+*.dcd
+*.pdb
+*.zip
+*.exe
+.system_generated/
+
+# Environments
+.env
+.venv
+env/
+venv/
