@@ -1,0 +1,15 @@
+MOVED_TO_EQUIPHASE
+================================================================================
+Timestamp: 2026-08-20T21:45:00+09:00
+Directive: WORKSPACE-SEP-260820-01 (Task WS-1 / WS-2)
+
+NOTICE OF TRACK SEPARATION:
+All molecular biology / protein dynamics assets (Paper A, Paper B, Chignolin 1UAO,
+EquiPhase DEQ training harness, Gates v1~v6, scoring ledgers, and state hash chains)
+have been officially relocated to:
+
+    E:\00000000000000000_D드라이브 파일 이동\AI\EquiPhase_PaperAB\
+
+CELFM is now permanently designated as the pure Financial Market Energy Analysis (Paper F)
+workspace. No molecular simulations, evaluations, or manuscript builds shall occur within CELFM.
+================================================================================

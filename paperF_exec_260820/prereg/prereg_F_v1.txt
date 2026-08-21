@@ -1,0 +1,18 @@
+PREREG_F_v1 | generated 2026-08-20T14:25:09.109555+00:00 | panel_manifest=5a475c8337f887fe38f10a11cc2e511f99afccb3a92a962705d86a4455cce122
+DEFINITIONS
+ q_t = PCA_8( standardized log-returns window W=20 ), PCA fit on train <= 2018-12-31
+ V = learned energy; attractor q* = relaxation fixed point (damped Verlet, gamma=0.5, dt=0.01, steps=2000); merge eps=0.05
+ V_anc = (V(q*_i) - V(q*_0)) / (V_max_train - V_min_train) with q*_0 = attractor holding most train points
+ barrier(i->j) = V(saddle on string i->j) - V(q*_i), string nodes=32
+ lambda_min = smallest eigenvalue of autograd Hessian of V at q*
+ crisis windows (fixed): [{"name": "GFC_2008", "start": "2008-09-01", "end": "2009-03-31"}, {"name": "COVID_2020", "start": "2020-02-15", "end": "2020-04-30"}, {"name": "DOTCOM_2000", "start": "2000-03-01", "end": "2002-10-31"}, {"name": "EURO_2011", "start": "2011-07-01", "end": "2011-10-31"}]
+GATES (seeds [11, 22, 33]; all conditions must hold for every seed unless stated)
+ F1 surrogates ['time_shuffle', 'gaussian', 'iaaft']: N_attr == 1 AND lambda_min > 0 AND |V_anc| <= 0.05
+ F2 real train: N_attr >= 2 AND assignment_rate >= 0.95 AND cross-seed attractor distance <= 0.1
+ F3 holdout >= 2019-01-02: assignment_rate >= 0.9 AND new_attractors == 0
+ F4 any attractor pair: barrier >= 1.0 nats AND at least one crisis window contains a basin transition
+ F5 regime occupancy in crisis windows within binomial 0.95 CI vs baseline occupancy
+ F6 Spearman rho over n=4 crisis windows (rank by barrier crossing depth vs. realized drawdown) >= 0.8; admissible values=[-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+ F7 lambda_min(H*) > 0 at EVERY attractor (any negative -> GATE_NOT_MET, no exceptions)
+ F8 barrier-trend early warning lead time >= 10.0 days, placebo windows=100, one-sided p < 0.05
+RULES: thresholds frozen at seal; no measured value may be written here; F1 failure halts all later gates.

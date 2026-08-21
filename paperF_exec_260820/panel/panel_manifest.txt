@@ -1,0 +1,9 @@
+built_at=2026-08-20T14:27:11.216115+00:00
+source=tickers_file
+N=322
+T=7041
+start=1998-01-05
+end=2025-12-30
+435c36194bd7f31c657ef903799b46078eb531fc39282e418adb0ad98be2faa4  prices.parquet
+dd00acf26ecfbc8cbc2aea9307db2651bae5f6b99848eea7370720206bb18766  logret.parquet
+9dfd8cf76d7bd906a85b80c70e6149016508b7719aca890a3556ac92181b5c20  tickers_manifest.csv
